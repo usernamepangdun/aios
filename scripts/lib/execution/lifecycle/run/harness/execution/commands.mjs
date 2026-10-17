@@ -17,6 +17,7 @@ import { runHarnessDryRunChecks } from './dry-run.mjs';
 import { renderStatus } from '../session/status.mjs';
 import { buildProductionExecuteTurn } from './execute-turn.mjs';
 import { buildPiRpcExecuteTurn } from './execute-turn-pi-rpc.mjs';
+import { resolveInheritedClaudeSettings } from '../../../../../foundation/clients/execution/profile-inheritance.mjs';
 import { createLifecycleHooks } from '../support/hooks.mjs';
 import { resolveResumeWorktree } from '../session/worktree.mjs';
 import { writeHarnessDashboard } from '../../../../harness/ops/dashboard.mjs';
@@ -63,6 +64,11 @@ export async function runHarnessCommand(options = {}, {
 
   if (subcommand === 'run') {
     const provider = normalizeText(options.provider, 'codex');
+    // 中文注释：run 时解析当前会话 profile（最近 claude 祖先 argv > AIOS_CLAUDE_SETTINGS），
+    // 写入 journal 供 resume 使用，并显式传给 turn 执行器。
+    const providerSettings = provider === 'claude'
+      ? resolveInheritedClaudeSettings({ env: process.env }).settingsPath
+      : '';
     if (options.transport === 'rpc' && provider !== 'pi') {
       throw new Error('--transport rpc is only supported with --provider pi');
     }
@@ -94,6 +100,7 @@ export async function runHarnessCommand(options = {}, {
       },
       aiosRootDir: runtimeAiosRootDir,
       workspaceRoot: path.resolve(rootDir),
+      providerSettings,
     });
 
     if (options.dryRun === true) {
@@ -200,6 +207,7 @@ export async function runHarnessCommand(options = {}, {
           sessionId: session.sessionId,
           objective,
           provider,
+          providerSettings,
           aiosRootDir: runtimeAiosRootDir,
           turnTimeoutMs: options.turnTimeoutMs,
         }),
@@ -272,6 +280,10 @@ export async function runHarnessCommand(options = {}, {
       worktree: restoredWorktree,
       updatedAt: new Date().toISOString(),
     });
+    // 中文注释：resume 优先沿用 run 时持久化的 profile；旧 summary 没有该字段时回退到当前祖先解析。
+    const providerSettings = summary.provider === 'claude'
+      ? (normalizeText(existing.providerSettings) || resolveInheritedClaudeSettings({ env: process.env }).settingsPath)
+      : '';
     if (options.transport === 'rpc' && summary.provider !== 'pi') {
       throw new Error('--transport rpc is only supported with --provider pi');
     }
@@ -299,6 +311,7 @@ export async function runHarnessCommand(options = {}, {
           sessionId: summary.sessionId,
           objective: summary.objective,
           provider: summary.provider,
+          providerSettings,
           turnTimeoutMs: options.turnTimeoutMs,
         }),
       maxIterations: options.maxIterations,

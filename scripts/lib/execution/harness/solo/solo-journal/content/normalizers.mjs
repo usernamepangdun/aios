@@ -124,6 +124,8 @@ export function normalizeRunSummary(input = {}) {
     profile: normalizeText(input.profile, 'standard'),
     aiosRootDir: normalizeAbsolutePath(input.aiosRootDir),
     workspaceRoot: normalizeAbsolutePath(input.workspaceRoot),
+    // 中文注释：持久化 claude profile 路径，保证换 shell / cron 后 resume 仍跟随原配置。
+    providerSettings: normalizeAbsolutePath(input.providerSettings),
     iterationCount: Number.isFinite(input.iterationCount) ? Math.max(0, Math.floor(input.iterationCount)) : 0,
     lastIteration: Number.isFinite(input.lastIteration) ? Math.max(0, Math.floor(input.lastIteration)) : 0,
     lastOutcome: normalizeText(input.lastOutcome),

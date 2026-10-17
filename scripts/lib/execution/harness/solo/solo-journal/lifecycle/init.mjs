@@ -28,6 +28,7 @@ export async function initSoloRunJournal(input = {}) {
     profile: normalizeText(input.profile, existingSummary?.profile || 'standard'),
     aiosRootDir: normalizeText(input.aiosRootDir, existingSummary?.aiosRootDir || ''),
     workspaceRoot: normalizeText(input.workspaceRoot, existingSummary?.workspaceRoot || ''),
+    providerSettings: normalizeText(input.providerSettings, existingSummary?.providerSettings || ''),
     status: normalizeText(existingSummary?.status, 'running'),
     stopRequested: existingSummary?.stopRequested === true,
     worktree: {

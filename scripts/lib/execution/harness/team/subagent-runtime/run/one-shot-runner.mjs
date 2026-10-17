@@ -1,4 +1,5 @@
 import { commandExists } from '../../../../../foundation/platform/process.mjs';
+import { buildClaudeSettingsArgs } from '../../../../../foundation/clients/execution/profile-inheritance.mjs';
 import { buildOneShotInvocation } from '../../subagent-clients/one-shot.mjs';
 import { runClientInvocation } from '../../subagent-clients/invocation-runner.mjs';
 
@@ -18,7 +19,9 @@ const PENDING_SMOKE_SUBAGENT_CLIENTS = new Set([]);
 function buildRuntimeInvocation({ clientId, systemPrompt, userPrompt, env, codexOutput, modelRouting }) {
   const systemText = normalizeText(systemPrompt);
   const promptText = normalizeText(userPrompt);
-  const routedExtraArgs = buildRoutedExtraArgs(clientId, modelRouting, env);
+  // 中文注释：claude worker 跟随当前会话的 profile；有 settings 时 buildRoutedExtraArgs 会抑制 --model。
+  const settingsArgs = clientId === 'claude-code' ? buildClaudeSettingsArgs({ env }) : [];
+  const routedExtraArgs = buildRoutedExtraArgs(clientId, modelRouting, env, { settingsArgs });
   const invocation = buildOneShotInvocation({
     clientId,
     systemText,

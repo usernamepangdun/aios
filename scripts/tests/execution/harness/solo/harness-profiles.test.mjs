@@ -75,6 +75,24 @@ test('buildSoloHarnessCommand defaults codex harness runs to unattended mode', (
   );
 });
 
+test('buildSoloHarnessCommand forwards claude settings and defaults to unattended mode', () => {
+  const built = buildSoloHarnessCommand({
+    rootDir: '/tmp/aios',
+    sessionId: 'session-1',
+    objective: 'Ship checklist',
+    provider: 'claude',
+    prompt: 'return json',
+    extraArgs: ['--settings', '/tmp/profile.json'],
+  });
+
+  const separatorIndex = built.args.indexOf('--');
+  assert.notEqual(separatorIndex, -1);
+  assert.deepEqual(
+    built.args.slice(separatorIndex + 1),
+    ['--dangerously-skip-permissions', '--settings', '/tmp/profile.json']
+  );
+});
+
 test('buildSoloHarnessCommand separates AIOS install root from target workspace', () => {
   const built = buildSoloHarnessCommand({
     rootDir: '/tmp/project',

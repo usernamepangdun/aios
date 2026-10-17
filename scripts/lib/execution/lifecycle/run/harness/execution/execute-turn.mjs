@@ -5,6 +5,7 @@ import { buildSoloHarnessCommand } from '../../../../harness/solo/solo-profiles.
 import { classifySoloFailure } from '../../../../harness/solo/solo-runtime.mjs';
 import { compressPostReceiveTurn, compressPreSendTurn, emitTurnCompressionLog, requireTurnCompression } from '../../../../../foundation/interception/index.mjs';
 import { normalizeText } from '../support/shared.mjs';
+import { normalizeSettingsPath } from '../../../../../foundation/clients/execution/profile-inheritance.mjs';
 import { buildIterationPrompt, parseHarnessJsonOutput } from '../session/prompt.mjs';
 
 const DEFAULT_TURN_TIMEOUT_MS = 30 * 60 * 1000;
@@ -28,9 +29,11 @@ function buildTerminationEvidence(result = {}, timeoutMs = 0) {
 }
 
 /* 中文注释：生产执行器负责跑一轮 provider，并把 provider 输出纳入 interception packet，防止长任务日志撑爆上下文。 */
-export function buildProductionExecuteTurn({ rootDir, aiosRootDir = '', sessionId, objective, provider, spawnCommandImpl = spawnCommand, turnTimeoutMs = DEFAULT_TURN_TIMEOUT_MS } = {}) {
+export function buildProductionExecuteTurn({ rootDir, aiosRootDir = '', sessionId, objective, provider, providerSettings = '', spawnCommandImpl = spawnCommand, turnTimeoutMs = DEFAULT_TURN_TIMEOUT_MS } = {}) {
   const runtimeAiosRootDir = path.resolve(normalizeText(aiosRootDir, rootDir));
   const effectiveTurnTimeoutMs = normalizeTurnTimeoutMs(turnTimeoutMs);
+  // 中文注释：只对 claude 注入；路径在生成命令前校验，失效时明确回退为不注入。
+  const inheritedSettingsPath = provider === 'claude' ? normalizeSettingsPath(providerSettings) : '';
   return async ({ iteration, continuity, offloadCanvas, summary, worktree, bypass = false, abortSignal = null }) => {
     const prompt = buildIterationPrompt({
       objective,
@@ -74,6 +77,7 @@ export function buildProductionExecuteTurn({ rootDir, aiosRootDir = '', sessionI
       provider,
       workspaceRoot,
       prompt: providerPrompt,
+      extraArgs: inheritedSettingsPath ? ['--settings', inheritedSettingsPath] : [],
     });
     const result = await spawnCommandImpl(built.command, built.args, {
       cwd: built.cwd,

@@ -76,6 +76,12 @@ function contractRoute(clientId = '', modelRouting = null, env = process.env, co
 }
 
 export function buildRoutedExtraArgs(clientId = '', modelRouting = null, env = process.env, context = {}) {
+  // 中文注释：provider profile 模式下显式转发 --settings（flagSettings 高于 userSettings），
+  // 并抑制 model router 的 --model，避免模型名与 profile 的端点/模型不匹配。
+  const settingsArgs = clientId === 'claude-code' && Array.isArray(context.settingsArgs)
+    ? context.settingsArgs.filter(Boolean)
+    : [];
+  if (settingsArgs.length > 0) return settingsArgs;
   if (!isModelRouterEnabled(env)) return [];
   return buildClientModelArgs(clientId, contractRoute(clientId, modelRouting, env, context));
 }

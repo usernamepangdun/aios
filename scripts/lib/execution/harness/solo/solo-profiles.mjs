@@ -104,7 +104,9 @@ export function buildSoloHarnessCommand({
   }
 
   const normalizedObjective = normalizeText(objective, 'Solo harness objective');
-  const defaultExtraArgs = profile.provider === 'codex' ? getClientUnattendedArgs(profile.clientId) : [];
+  // 中文注释：codex 与 claude 的 solo 长跑都默认走 unattended，否则非交互 --print 下工具调用会被权限门拦住。
+  const unattendedProviders = new Set(['codex', 'claude']);
+  const defaultExtraArgs = unattendedProviders.has(profile.provider) ? getClientUnattendedArgs(profile.clientId) : [];
   const validatedExtraArgs = uniqueArgs([
     ...validateSoloHarnessExtraArgs(defaultExtraArgs),
     ...validateSoloHarnessExtraArgs(extraArgs),
