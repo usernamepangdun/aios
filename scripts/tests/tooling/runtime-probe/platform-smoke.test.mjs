@@ -149,7 +149,10 @@ describe('REQUIRED: py/py3 — Cross-Platform Safety', () => {
       /const script = \[\s*'\[Net\.ServicePointManager\]::SecurityProtocol = \[Net\.SecurityProtocolType\]::Tls12'/u,
       'the generated PowerShell script must set TLS 1.2 as its first statement',
     );
-    assert.ok(content.includes('irm "https://'), 'should keep the remote installer fetch as fallback');
+    assert.ok(
+      /irm "\$\{installerAssetBase\}\/aios-install\.ps1"/.test(content),
+      'should keep the remote installer fetch as fallback',
+    );
   });
 
   it('dispatch starts TUI through local tsx cli instead of npx shell', () => {

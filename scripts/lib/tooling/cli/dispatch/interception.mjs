@@ -4,7 +4,7 @@ import { runInterceptionProof } from '../../../foundation/interception/pipeline/
 import { runInterceptionRewrite } from '../../../foundation/interception/pipeline/rewrite.mjs';
 import { runInterceptionTail } from '../../../foundation/interception/pipeline/tail.mjs';
 
-/* 中文注释：proof 只验证链路；doctor/mcp-migrate 复用同一修复实现，防止修复逻辑分叉。 */
+/* 中文注释：proof 只验证链路；doctor/mcp-migrate/mcp-repair 复用同一修复实现，防止修复逻辑分叉。 */
 export async function runInterceptionCommand(parsed, { rootDir, workspaceRoot }) {
   if (parsed.options.subcommand === 'proof') {
     return runInterceptionProof(parsed.options, { rootDir: workspaceRoot });
@@ -50,6 +50,25 @@ export async function runInterceptionCommand(parsed, { rootDir, workspaceRoot })
     }
 
     return result;
+  }
+
+  if (parsed.options.subcommand === 'mcp-repair') {
+    const { repairStaleAiosMcpPaths } = await import('../../../tooling/components/browser/mcp/mcp-path-repair.mjs');
+    const json = Boolean(parsed.options.json);
+    /* 中文注释：mcp-repair 默认只预览：改的是用户长期配置，必须 --fix 才写盘。
+     * （mcp-migrate 仍保持旧行为：它的语义就是“迁移并写入”。） */
+    const result = await repairStaleAiosMcpPaths({
+      rootDir,
+      client: parsed.options.client || 'all',
+      dryRun: !parsed.options.fix,
+      io: json ? { log() {} } : console,
+    });
+    if (json) console.log(JSON.stringify(result, null, 2));
+    else {
+      console.log(`mcp-repair: stableRoot=${result.stableRoot || 'NONE'} stale=${result.stale.length} changed=${result.changedPaths.length} dryRun=${result.dryRun}`);
+      if (result.reason) console.log(`  reason: ${result.reason}`);
+    }
+    return { ...result, exitCode: result.ok ? 0 : 1 };
   }
 
   if (parsed.options.subcommand === 'doctor' || parsed.options.subcommand === 'mcp-migrate') {

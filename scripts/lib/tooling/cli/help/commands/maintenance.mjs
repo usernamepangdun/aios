@@ -286,6 +286,7 @@ Options:
   aios interception tail [--session <id> | --latest] [--limit <n>] [--json] [--workspace <path>]
   aios interception rewrite --command <cmd> [--hook claude] [--json]
   aios interception mcp-migrate [--dry-run] [--json]
+  aios interception mcp-repair [--client <name>] [--fix] [--json]
   aios interception audit [--timezone <tz>] [--date <YYYY-MM-DD>] [--json] [--workspace <path>]
 
 Subcommands:
@@ -294,6 +295,7 @@ Subcommands:
   tail         Show recent interception metric events from the latest or selected session
   rewrite      Rewrite shell commands for host-native tool hooks
   mcp-migrate  Migrate browser MCP configs to direct browser-use delivery
+  mcp-repair   Re-point AIOS-managed MCP entries that drifted to a stale temp path, onto the stable AIOS runtime root (preview by default; --fix writes)
   audit        Hourly token usage aggregation with timezone-aware query
 
 Options:

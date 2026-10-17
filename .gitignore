@@ -108,8 +108,12 @@ memory/memo/
 
 # Client-local MCP config — per-machine paths, not to be committed
 .opencode.json
-# (root opencode.json stays tracked: generic relative paths, shape asserted by
-# scripts/tests/ecc-uplift.test.mjs)
+# 根级 opencode.json 自 2026-10-17 起不再入库：它由 native 投影（emitters/opencode.mjs
+# → buildOpenCodeConfig）在 `aios init` 时按机器生成，且 home 作用域的 mcp 条目会把
+# AIOS 绝对路径写进来——入库等于把一台机器的路径分发给付费用户（opencode 2.0 升级后
+# 就是这样让所有人吃到 ENOENT / stale temp path 的）。配置形状由
+# scripts/tests/execution/team/ecc-uplift.test.mjs 在临时 rootDir 上断言，不依赖入库文件。
+opencode.json
 .hermes/.aios-native-sync.json
 .crush.json
 crush.json

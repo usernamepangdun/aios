@@ -10,6 +10,7 @@ import { inspectGraphFreshness } from '../graph/freshness.mjs';
 import { collectCodemapInstructionFiles, inspectCodemapInstructionMarkers } from '../targets/instructions.mjs';
 import { installCodemap } from './install.mjs';
 import { collectCodemapMcpTargets, inspectCodemapMcpTarget } from '../targets/mcp-targets.mjs';
+import { auditOpenCodePlugins, detectOpenCodeMajor, findDanglingOpenCodePluginEntries } from '../../../../clients/opencode/plugin-contract.mjs';
 import { normalizeClientList } from '../targets/selection.mjs';
 import { readState, stateFilePath } from '../state-store.mjs';
 
@@ -97,6 +98,29 @@ function checkDoctorConfigs({ projectRootPath, homes, client, counters }) {
   }
 }
 
+/* 中文注释：opencode 插件契约检查。v2 加载器只读 default 导出，不兼容插件不会退出报错，
+ * 只是 WARN 之后静默停摆——所以必须由 doctor 把它说出来。
+ * AIOS 自有文件可自愈（重跑 install）；第三方文件只报告，不改别人的代码。 */
+function checkDoctorOpencodePlugin({ homes, client, counters }) {
+  if (client && client !== 'all' && client !== 'opencode') return;
+  const opencodeHome = homes?.opencode;
+  if (!opencodeHome) return;
+  const audit = auditOpenCodePlugins({ opencodeHome, major: detectOpenCodeMajor({ bin: 'opencode' }) });
+  if (audit.scanStatus !== 'ok') return;
+  for (const item of audit.findings) {
+    if (item.ok) counters.ok(`opencode plugin contract ok: ${item.name}`);
+    else {
+      counters.warn(
+        `opencode plugin not loadable by 2.x (${item.verdict}): ${item.file}`
+        + (item.owned ? ' - rerun "aios internal codemap install" to heal' : ' - third-party, AIOS will not rewrite it'),
+      );
+    }
+  }
+  for (const item of findDanglingOpenCodePluginEntries(path.join(opencodeHome, 'opencode.json')).dropped) {
+    counters.warn(`opencode plugin entry points at a missing file: ${item.entry} (${item.resolved})`);
+  }
+}
+
 function checkDoctorStateAndDocs({ projectRootPath, client, counters }) {
   const state = readState(projectRootPath);
   if (state && state.version === 1) counters.ok(`state file valid: ${stateFilePath(projectRootPath)}`);
@@ -165,6 +189,7 @@ export async function doctorCodemap({
   checkDoctorRuntime({ projectRootPath, skipCrgChecks, statusText, crgVersion, io, counters, graphFreshness: freshness });
   io.log('[5/7] Checking MCP config in clients');
   checkDoctorConfigs({ projectRootPath, homes, client, counters });
+  checkDoctorOpencodePlugin({ homes, client, counters });
   checkClaudeLocalDisable({ projectRootPath, client, counters });
   io.log('[6/7] Checking state file');
   io.log('[7/7] Checking client instruction files');

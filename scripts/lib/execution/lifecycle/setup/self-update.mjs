@@ -137,7 +137,14 @@ async function updateFromReleaseInstaller(rootDir, {
     }
   }
 
-  const releaseSegment = newest?.tag ? `releases/download/${newest.tag}` : 'releases/latest';
+  // 中文注释：安装器资产 URL 的唯一拼接口径。旧写法把
+  // `releases/download/<tag>` 当 segment、再在模板里补 `/download/`，tag 分支
+  // 生成 `releases/download/vX.Y.Z/download/aios-install.sh` → 404；而该分支
+  // 恰恰是 release 查询成功（正常路径）时才会走到。资产基址在这里一次拼对，
+  // 两个平台分支只追加文件名。
+  const installerAssetBase = newest?.tag
+    ? `https://github.com/${repo}/releases/download/${newest.tag}`
+    : `https://github.com/${repo}/releases/latest/download`;
   const env = {
     ...process.env,
     AIOS_REPO: repo,
@@ -161,9 +168,10 @@ async function updateFromReleaseInstaller(rootDir, {
     const localInstaller = path.join(rootDir, 'scripts', 'aios-install.ps1');
     const installerCmd = await pathExists(localInstaller)
       ? `& '${quotePowerShellSingleString(localInstaller)}'`
-      : `irm "https://github.com/${repo}/${releaseSegment}/download/aios-install.ps1" | iex`;
+      : `irm "${installerAssetBase}/aios-install.ps1" | iex`;
     const script = [
       '[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12',
+      '$ErrorActionPreference = "Stop"',
       `$env:AIOS_REPO='${psRepo}'`,
       `$env:AIOS_INSTALL_DIR='${psRootDir}'`,
       installerCmd,
@@ -173,7 +181,11 @@ async function updateFromReleaseInstaller(rootDir, {
     return { method: 'release-installer', updated: true, skipped: false };
   }
 
-  const script = `curl -fsSL https://github.com/${repo}/${releaseSegment}/download/aios-install.sh | bash`;
+  // 中文注释：`set -o pipefail` 是失败必须响亮报出的那半修 —— 没有它，
+  // `curl <404> | bash` 的退出码取最后一个命令（bash 读空 stdin 退 0），
+  // 安装器拉取失败会被当成成功替换并继续 --skip-self-update 重执行，
+  // 整个升级变成报 Done 的 no-op。
+  const script = `set -o pipefail; curl -fsSL ${installerAssetBase}/aios-install.sh | bash`;
   io.log('+ runtime self-update: GitHub Releases installer');
   await run('bash', ['-lc', script], { cwd: process.env.HOME || process.env.USERPROFILE || rootDir, env, io });
   return { method: 'release-installer', updated: true, skipped: false };

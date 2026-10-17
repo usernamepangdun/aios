@@ -10,7 +10,9 @@ import { formatErrorMessage } from '../shared.mjs';
 // 切换浏览器选型：先校验原始输入（非法抛错，不让 resolveBrowserMode 隐式归一为 none），
 // 再落 settings（写入失败先抛，避免 materialize 了错误模式），
 // 最后重新 materialize MCP 配置。materialize 失败只告警不阻塞切换。
-export async function switchBrowserMcpMode({ rootDir, mode, io = console, dryRun = false } = {}) {
+/* 中文注释：clientHomes 是沙箱接缝：测试与嵌入式调用方传入自己的 home 映射，
+ * 否则 migrate 会拿真实用户家目录当落点（历史上曾把临时路径写进真机的 opencode.json）。 */
+export async function switchBrowserMcpMode({ rootDir, mode, io = console, dryRun = false, clientHomes = null } = {}) {
   if (!validateBrowserMode(mode)) {
     throw new Error(`unknown browser mode '${mode}' (expected one of ${BROWSER_MODES.join(', ')})`);
   }
@@ -21,7 +23,7 @@ export async function switchBrowserMcpMode({ rootDir, mode, io = console, dryRun
   const settings = setBrowserModeInSettings(rootDir, normalized);
 
   const migrationResult = await migrateBrowserMcpConfig({
-    rootDir, mode: normalized, io, dryRun,
+    rootDir, mode: normalized, io, dryRun, clientHomes,
   }).catch((error) => {
     const message = formatErrorMessage(error).split(/\r?\n/u)[0];
     io?.log?.(`[warn] browser MCP config auto-update skipped: ${message}`);

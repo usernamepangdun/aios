@@ -1,5 +1,8 @@
 /* 中文注释：Interception 回归测试覆盖压缩、召回、指标和客户端配置，防止链路退化成 prompt-only。 */
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import nodePath from 'node:path';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
@@ -34,5 +37,48 @@ test('all host capability entries require bidirectional turn compression and dis
     assert.equal(entry.turnCompression?.preSendRequired, true, `${clientId} must require pre-send compression`);
     assert.equal(entry.turnCompression?.postReceiveRequired, true, `${clientId} must require post-receive compression`);
     assert.equal(entry.turnCompression?.uncontrolledHostOutput, 'policy-violation', `${clientId} must treat uncontrolled host output as a violation`);
+  }
+});
+
+/* 中文注释：能力矩阵是随运行时分发的静态内容，不是用户工程产物。历史缺陷是把它按调用方
+   rootDir（= 工作区）拼路径，在仓库外跑 `aios interception doctor` 会直接 ENOENT；开发机上
+   看不出来，是因为工作区恰好就是仓库根。以下三例锁住「工作区优先、缺失则回落模块锦定的运行时根」。 */
+const { resolveInterceptionConfigPath, loadHostCapabilities } = await import(
+  '../../../../lib/foundation/interception/transport/clients/capabilities.mjs'
+);
+
+function tempWorkspace(prefix) {
+  return fs.mkdtempSync(nodePath.join(os.tmpdir(), prefix));
+}
+
+test('capabilities config resolves from the caller workspace when the workspace ships one', () => {
+  const workspace = tempWorkspace('aios-cap-workspace-');
+  fs.mkdirSync(nodePath.join(workspace, 'config'), { recursive: true });
+  fs.writeFileSync(nodePath.join(workspace, 'config', 'host-capabilities.json'), JSON.stringify({
+    schemaVersion: 1,
+    clients: {
+      'workspace-override': {
+        targetLevel: 'L0', capabilities: [], limits: [],
+        requiredEntrypoint: 'aios-managed-runner', directHostBypassAllowed: false,
+      },
+    },
+  }), 'utf8');
+  const resolved = resolveInterceptionConfigPath(workspace);
+  assert.equal(resolved, nodePath.join(workspace, 'config', 'host-capabilities.json'));
+  assert.equal(loadHostCapabilities(workspace).clients['workspace-override'].targetLevel, 'L0');
+});
+
+test('capabilities config falls back to the runtime root for a workspace without one', () => {
+  const workspace = tempWorkspace('aios-cap-plain-');
+  const resolved = resolveInterceptionConfigPath(workspace);
+  assert.ok(!resolved.startsWith(workspace), `a workspace without config/ must not win: ${resolved}`);
+  assert.ok(fs.existsSync(resolved), `fallback must reach a shipped config, got ${resolved}`);
+  assert.equal(loadHostCapabilities(workspace).schemaVersion, 1);
+});
+
+test('capabilities config resolves without a caller root at all', () => {
+  for (const root of [undefined, '', null]) {
+    const resolved = resolveInterceptionConfigPath(root);
+    assert.ok(fs.existsSync(resolved), `root=${String(root)} must still resolve, got ${resolved}`);
   }
 });

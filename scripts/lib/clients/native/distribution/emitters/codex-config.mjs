@@ -12,6 +12,8 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
+import { isVolatileAiosRoot } from '../../../../foundation/platform/aios-runtime-root.mjs';
+
 const MANAGED_BEGIN = '# >>> aios-managed-begin (AIOS codex trust + MCP; do not edit inside) >>>';
 const MANAGED_END = '# <<< aios-managed-end <<<';
 
@@ -143,8 +145,15 @@ export async function syncCodexHomeConfig({
   env = process.env,
   homeDir = '',
   fsImpl = fs,
+  tmpdir = os.tmpdir(),
 } = {}) {
   const targetPath = path.join(codexHomeDir(env, homeDir), 'config.toml');
+  /* 中文注释：同一道易失根守卫（与 migrateBrowserMcpConfig 一致）。
+   * 托管段里的绝对路径取自 rootDir，一旦 rootDir 是临时物化目录而落点是长期配置，
+   * 系统回收后 codex 的 MCP 就永久失联。沙箱到沙箱照旧放行。 */
+  if (isVolatileAiosRoot(rootDir, { env, tmpdir }) && !isVolatileAiosRoot(targetPath, { env, tmpdir })) {
+    return { status: 'skipped', reason: 'volatile-root', path: targetPath };
+  }
   const previous = await fsImpl.readFile(targetPath, 'utf8').catch((error) => {
     if (['ENOENT', 'ENOTDIR'].includes(error?.code)) return '';
     throw error;

@@ -1,7 +1,7 @@
 /* 中文注释：interception 参数解析，基于 Commander 声明式 */
 import { Command } from 'commander';
 
-const INTERCEPTION_SUBCOMMANDS = new Set(['doctor', 'proof', 'tail', 'rewrite', 'mcp-migrate', 'audit']);
+const INTERCEPTION_SUBCOMMANDS = new Set(['doctor', 'proof', 'tail', 'rewrite', 'mcp-migrate', 'mcp-repair', 'audit']);
 
 const program = new Command()
   .name('interception')
@@ -30,6 +30,7 @@ for (const name of INTERCEPTION_SUBCOMMANDS) {
     ['--enforce-turns', 'Enforce turn compression metrics (doctor only)'],
     ['--workspace <path>', 'Workspace root'],
     ['--command <text>', 'Command text (rewrite only)'],
+    ['--client <name>', 'Client scope for mcp-repair (default: all)'],
     ['--hook <name>', 'Hook name: claude (rewrite only)'],
     ['--input <text>', 'Input text'],
     ['--latest', 'Get latest (tail only)'],
@@ -48,7 +49,7 @@ export function parseInterceptionArgs(argv) {
   const options = {
     subcommand: 'doctor', session: '', json: false, fix: false, dryRun: false,
     workspaceRoot: '', latest: false, limit: 10, enforceTurns: false,
-    commandText: '', hook: '', input: '', timezone: 'UTC', date: '',
+    commandText: '', hook: '', input: '', timezone: 'UTC', date: '', client: 'all',
   };
 
   try {
@@ -93,6 +94,7 @@ export function parseInterceptionArgs(argv) {
     if (effectiveFlags.input) options.input = effectiveFlags.input;
     if (effectiveFlags.timezone) options.timezone = effectiveFlags.timezone;
     if (effectiveFlags.date) options.date = effectiveFlags.date;
+    if (effectiveFlags.client) options.client = String(effectiveFlags.client).trim().toLowerCase();
 
     return { mode: help ? 'help' : 'command', help, command: 'interception', options };
   } catch (e) {

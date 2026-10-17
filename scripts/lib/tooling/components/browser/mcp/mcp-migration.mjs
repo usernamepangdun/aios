@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { getClientHomes } from '../../../../foundation/platform/paths.mjs';
+import { isVolatileAiosRoot } from '../../../../foundation/platform/aios-runtime-root.mjs';
 import { AUTH_TOOLS_ALIAS, PRIMARY_BROWSER_ALIAS, SHELL_ALIAS } from '../constants.mjs';
 import { BROWSER_MCP_ALIASES, findFirstBrowserServerEntry, removeLegacyBrowserServerEntries } from './mcp-aliases.mjs';
 import { buildAuthToolsMcpServer, buildShellMcpServer } from './mcp-server-builders.mjs';
@@ -114,12 +115,26 @@ function targetsHaveExistingBrowser(targets) {
   return false;
 }
 
-export async function migrateBrowserMcpConfig({ rootDir, mode = null, io = console, dryRun = false, clientHomes = null } = {}) {
+export async function migrateBrowserMcpConfig({ rootDir, mode = null, io = console, dryRun = false, clientHomes = null, env = process.env, tmpdir = os.tmpdir() } = {}) {
   let resolvedMode = typeof mode === 'string' ? mode : resolveBrowserMode(null, { rootDir });
   const explicitMode = typeof mode === 'string' || hasExplicitBrowserModeInSettings(rootDir);
 
-  const homes = clientHomes && typeof clientHomes === 'object' ? clientHomes : getClientHomes(process.env, os.homedir());
-  const targets = collectBrowserMcpMigrationTargets({ rootDir, clientHomes: homes });
+  const homes = clientHomes && typeof clientHomes === 'object' ? clientHomes : getClientHomes(env, os.homedir());
+  let targets = collectBrowserMcpMigrationTargets({ rootDir, clientHomes: homes });
+
+  /* 中文注释：易失根守卫。从 mkdtemp 物化目录发起的迁移不得写进**长期存在**的配置文件：
+   * 一旦把临时路径写进 home 配置，系统回收该目录后客户端 MCP 永久失联（opencode 2.0 现场即此）。
+   * 沙箱到沙箱（目标也在临时目录下）照旧允许，否则测试无法自测自己的落点。 */
+  const sourceVolatile = isVolatileAiosRoot(rootDir, { env, tmpdir });
+  const skipped = [];
+  if (sourceVolatile) {
+    const persistent = targets.filter((target) => !isVolatileAiosRoot(target.path, { env, tmpdir }));
+    for (const target of persistent) {
+      io.log?.(`WARN mcp-migrate refused (volatile AIOS root): ${target.path}`);
+      skipped.push({ path: target.path, reason: 'volatile-root' });
+    }
+    targets = targets.filter((target) => isVolatileAiosRoot(target.path, { env, tmpdir }));
+  }
 
   // 保留已有 browser：无显式选择且目标里有旧 browser 条目时，按 playwright 保留升级而不是删掉。
   // Fresh（无旧条目）保持 none（默认-off）。显式 none 尊重用户选择，照常删除。
@@ -140,11 +155,11 @@ export async function migrateBrowserMcpConfig({ rootDir, mode = null, io = conso
     }
   }
 
-  return applyMcpConfigMigration({ targets, rootDir, io, dryRun, mode: resolvedMode });
+  return applyMcpConfigMigration({ targets, rootDir, io, dryRun, mode: resolvedMode, skipped });
 }
 
 /* 中文注释：apply 阶段统一统计 created/updated/unchanged/errors，doctor 用这些数字给出修复证据。 */
-export function applyMcpConfigMigration({ targets, rootDir, io, dryRun, mode = undefined }) {
+export function applyMcpConfigMigration({ targets, rootDir, io, dryRun, mode = undefined, skipped = [] }) {
   let created = 0;
   let updated = 0;
   let unchanged = 0;
@@ -204,5 +219,6 @@ export function applyMcpConfigMigration({ targets, rootDir, io, dryRun, mode = u
     errors,
     dryRun,
     changedPaths,
+    ...(skipped.length ? { skipped, skippedReason: 'volatile-root' } : {}),
   };
 }

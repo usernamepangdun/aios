@@ -100,3 +100,24 @@ test('stripManagedTables: 管理区整体移除，区外内容保留', () => {
   assert.match(next, /\[other\]/);
   assert.doesNotMatch(next, /aios-memory/);
 });
+
+test('syncCodexHomeConfig: 易失 rootDir 不得写持久 config.toml（B7 同源守卫）', async () => {
+  const volatileRoot = await mkdtemp(path.join(os.tmpdir(), 'aios-bsk-switch-VOLATILE-'));
+  const { impl, files } = memoryFs();
+  const persistentHome = '/persistent/home';
+  const result = await syncCodexHomeConfig({ rootDir: volatileRoot, homeDir: persistentHome, fsImpl: impl });
+  assert.equal(result.status, 'skipped');
+  assert.equal(result.reason, 'volatile-root');
+  assert.equal(result.path, path.join(persistentHome, '.codex', 'config.toml'));
+  assert.equal(files.size, 0, '一个字节都不能写');
+});
+
+test('syncCodexHomeConfig: 沙箱到沙箱（两边都易失）照旧放行', async () => {
+  const volatileRoot = await mkdtemp(path.join(os.tmpdir(), 'aios-bsk-switch-SANDBOX-'));
+  const sandboxHome = await mkdtemp(path.join(os.tmpdir(), 'aios-codex-sandbox-'));
+  const { impl, files } = memoryFs();
+  const result = await syncCodexHomeConfig({ rootDir: volatileRoot, homeDir: sandboxHome, fsImpl: impl });
+  assert.equal(result.status, 'created');
+  const written = files.get(path.join(sandboxHome, '.codex', 'config.toml'));
+  assert.ok(written && written.includes(volatileRoot), '沙箱内写沙箱路径是预期行为');
+});

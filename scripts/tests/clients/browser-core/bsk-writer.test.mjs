@@ -30,6 +30,24 @@ async function makeTemp(prefix) {
   return dir;
 }
 
+/* 中文注释：沙箱 clientHomes —— 切换测试必须把落点收进临时目录。
+ * 不传就会用真实家目录，测试一跑就把临时路径写进真机配置（迁移期真实事故）。 */
+function sandboxClientHomes(rootDir) {
+  const home = path.join(rootDir, 'home');
+  return {
+    codex: path.join(home, '.codex'),
+    claude: path.join(home, '.claude'),
+    claudeRoot: path.join(home, '.claude.json'),
+    gemini: path.join(home, '.gemini'),
+    opencode: path.join(home, '.config', 'opencode'),
+    hermes: path.join(home, '.hermes'),
+    grok: path.join(home, '.grok'),
+    workbuddy: path.join(home, '.workbuddy'),
+    zcode: path.join(home, '.zcode'),
+    qoder: path.join(home, '.qoder'),
+  };
+}
+
 after(async () => {
   await Promise.all(createdTempDirs.map((dir) => rm(dir, { recursive: true, force: true })));
 });
@@ -201,6 +219,7 @@ test('switch 到 bsk：落盘 + 产出 BSK 引导；切回 playwright 不带引�
   const bskLogs = [];
   const switchBsk = await switchBrowserMcpMode({
     rootDir, mode: 'bsk',
+    clientHomes: sandboxClientHomes(rootDir),
     io: { log: (m) => bskLogs.push(String(m)) },
   });
   assert.equal(switchBsk.mode, 'bsk');
@@ -211,6 +230,7 @@ test('switch 到 bsk：落盘 + 产出 BSK 引导；切回 playwright 不带引�
   const pwLogs = [];
   const switchPw = await switchBrowserMcpMode({
     rootDir, mode: 'playwright',
+    clientHomes: sandboxClientHomes(rootDir),
     io: { log: (m) => pwLogs.push(String(m)) },
   });
   assert.equal(switchPw.mode, 'playwright');
@@ -221,4 +241,9 @@ test('switch 到 bsk：落盘 + 产出 BSK 引导；切回 playwright 不带引�
   // 写回的 settings 是合法 JSON 且存了 mode
   const settings = JSON.parse(await readFile(path.join(rootDir, 'config', 'settings.json'), 'utf8'));
   assert.equal(settings.browser.mcp, 'playwright');
+
+  // 中文注释：materialize 的落点必须在沙箱 home 里，而不是真实用户家目录。
+  const sandboxConfig = path.join(sandboxClientHomes(rootDir).opencode, 'opencode.json');
+  const written = JSON.parse(await readFile(sandboxConfig, 'utf8'));
+  assert.ok(written.mcp, '沙箱 opencode.json 应被写入 mcp 段');
 });

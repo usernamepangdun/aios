@@ -22,6 +22,8 @@ New to AIOS? These posts will get you oriented:
 
 ## Latest Posts
 
+- [v6.5.0: OpenCode 2.x Plugin Contract, and the Config That Stopped Lying About Where AIOS Lives](2026-10-v650-opencode2-contract-config-stops-lying.md) — OpenCode 2.x reads only the `default` export, so AIOS plugins went silently dead; plugins now ship a 1.x/2.x dual export and self-heal on install, and `aios interception mcp-repair` re-points stale MCP paths at the stable runtime root
+
 - [One Sentence In, One Product Out: A Small Model Burned 3.6 Billion Tokens a Month — AIOS Makes Software Development Something Anyone Can Do](2026-10-qwen-flash-aios-pi.md) — the only skill you need is describing what you want; a month of heavy daily use at 96% cache hits, the bare-model vs. wrapped-in-AIOS comparison, and the whole E-drive project list one-sentence requirements shipped
 - [v6.4.0: A Control Plane That Stops Guessing — Ledgers Cannot Fork, Refusals Are Features, Gates Run Where They Claim](2026-10-v640-control-plane-stops-guessing.md) — plan ledgers cannot fork (A21–A23), the plan CLI refuses instead of substituting a read-only view (A19), declared checks run in CI (A20 + directory budget + affected tests), and the mattpocock v1.3 trio lands on both faces
 

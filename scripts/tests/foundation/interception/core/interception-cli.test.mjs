@@ -93,6 +93,22 @@ test('interception doctor and mcp migration make browser MCP direct', async () =
     'utf8'
   );
   const env = { AIOS_HOME: path.join(workspaceRoot, 'home') };
+  /* 中文注释：本测试的前提是「目标里已经有 browser 条目」，迁移才会走「保留并升级」分支。
+   * 以前这个前提靠机器上残留的真实配置供给了——一个干净检出的树里没有它们，
+   * mode 就解成 none、不写 browser 条目，测试只在环变量污染过的机器上“能跑过”。
+   * 现在把前提声在地自己沙箱里：向会被扫描到的目标（home 类 client home）写一条代理形态的 browser 条目。*/
+  const seedHome = path.join(env.AIOS_HOME, 'clients');
+  const proxiedArgs = [
+    path.join(process.cwd(), 'scripts', 'aios-mcp-proxy.mjs'),
+    '--host', 'mcp-browser-use',
+    '--', process.execPath, 'browser-use.mjs',
+  ];
+  await mkdir(path.join(seedHome, 'opencode'), { recursive: true });
+  await writeFile(
+    path.join(seedHome, 'opencode', 'opencode.json'),
+    `${JSON.stringify({ mcp: { 'mcp-browser-use': { type: 'local', command: process.execPath, args: proxiedArgs, enabled: true } } }, null, 2)}\n`,
+    'utf8',
+  );
   const result = runAios(['interception', 'doctor', '--fix', '--workspace', workspaceRoot, '--json'], env);
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const parsed = JSON.parse(result.stdout);
@@ -351,4 +367,48 @@ test('aios-intercept shell shorthand preserves failing command exit status', () 
   const packet = JSON.parse(result.stdout);
   assert.equal(packet.source, 'shell');
   assert.equal(packet.safety.requires_human, true);
+});
+
+test('interception mcp-repair previews by default and only writes with --fix', async () => {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'aios-mcp-repair-cli-'));
+  const env = { AIOS_HOME: path.join(workspaceRoot, 'home') };
+  const opencodeHome = path.join(workspaceRoot, 'home', 'clients', 'opencode');
+  await mkdir(opencodeHome, { recursive: true });
+  const staleScript = path.join(workspaceRoot, 'gone-run', 'scripts', 'auth-tools-server.py');
+  const configPath = path.join(opencodeHome, 'opencode.json');
+  const seeded = `${JSON.stringify({
+    mcp: {
+      'aios-auth-tools': { type: 'local', command: 'python3', args: [staleScript], enabled: true },
+      'user-owned': { type: 'local', command: 'node', args: ['/Users/someone/tools/server.js'], enabled: true },
+    },
+  }, null, 2)}\n`;
+  await writeFile(configPath, seeded, 'utf8');
+
+  const preview = runAios(['interception', 'mcp-repair', '--json', '--workspace', workspaceRoot], env);
+  assert.equal(preview.status, 0, preview.stderr || preview.stdout);
+  const previewJson = JSON.parse(preview.stdout);
+  assert.equal(previewJson.dryRun, true, '不带 --fix 必须是预览');
+  assert.equal(previewJson.stale.length, 1, JSON.stringify(previewJson.stale));
+  assert.equal(await readFile(configPath, 'utf8'), seeded, '预览不得写盘');
+  assert.equal((await import('node:fs')).readdirSync(opencodeHome).filter((n) => n.includes('bak-')).length, 0, '预览不得留备份');
+
+  const applied = runAios(['interception', 'mcp-repair', '--fix', '--json', '--workspace', workspaceRoot], env);
+  assert.equal(applied.status, 0, applied.stderr || applied.stdout);
+  const appliedJson = JSON.parse(applied.stdout);
+  assert.equal(appliedJson.dryRun, false);
+  assert.equal(appliedJson.changedPaths.length, 1, JSON.stringify(appliedJson.changedPaths));
+  assert.equal(appliedJson.backups.length, 1, '写盘前必须留一份备份');
+
+  const repaired = JSON.parse(await readFile(configPath, 'utf8'));
+  const authArgs = [...(repaired.mcp['aios-auth-tools'].command || []), ...(repaired.mcp['aios-auth-tools'].args || [])]
+    .filter((item) => typeof item === 'string' && item.startsWith('/'));
+  assert.ok(authArgs.some((item) => !item.startsWith(workspaceRoot)), `AIOS 条目应离开失效目录: ${JSON.stringify(authArgs)}`);
+  assert.equal(repaired.mcp['user-owned'].args[0], '/Users/someone/tools/server.js', '用户自有条目原样保留');
+
+  const second = runAios(['interception', 'mcp-repair', '--fix', '--json', '--workspace', workspaceRoot], env);
+  const secondJson = JSON.parse(second.stdout);
+  assert.equal(secondJson.stale.length, 0, '二次运行不得再判 stale');
+  assert.equal(secondJson.changedPaths.length, 0, '二次运行必须零写入');
+
+  await rm(workspaceRoot, { recursive: true, force: true });
 });

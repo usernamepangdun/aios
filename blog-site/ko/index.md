@@ -22,6 +22,8 @@ AIOS를 처음 사용하시나요? 이 게시물들이 방향을 잡아줄 것�
 
 ## 최신 글
 
+- [v6.5.0: OpenCode 2.x 플러그인 계약, 그리고 AIOS의 위치를 거짓으로 적지 않게 된 설정](2026-10-v650-opencode2-contract-config-stops-lying.md) — OpenCode 2.x는 `default` export만 읽어 AIOS 플러그인이 조용히 죽어 있었다. 1.x/2.x dual export화와 설치 시 자기 복구, `aios interception mcp-repair`로 무효 MCP 경로를 안정 runtime root로 되돌린다
+
 - [한 문장의 요구, 하나의 소프트웨어: 소형 모델이 한 달에 36억 토큰 — AIOS가 '누구나 개발할 수 있다'를 현실로](2026-10-qwen-flash-aios-pi.md) — 필요한 새 기술은 하나뿐이다, 요구를 명확히 말로 정리하는 것. 캐시 히트 96%의 한 달 고강도 사용, 맨 모델 vs AIOS 비교, 요구부터 납품까지의 흐름이 만든 E:/coding 프로젝트 목록
 - [v6.4.0: 추측하지 않는 컨트롤 플레인 — 원장은 갈라지지 않고, 거절은 기능이고, 게이트는 선언된 곳에서 돈다](2026-10-v640-control-plane-stops-guessing.md) — 계획 원장은 갈라지지 않는다(A21–A23), plan CLI는 읽기 전용 뷰로 치환하는 대신 거절한다(A19), 선언된 검사는 CI에서 돈다(A20 + 디렉터리 예산 + 영향 테스트), mattpocock v1.3 트리오 양면 채택
 

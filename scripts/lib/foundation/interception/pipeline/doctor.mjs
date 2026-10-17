@@ -4,6 +4,8 @@ import { readFile } from 'node:fs/promises';
 import { getClientHomes } from '../../platform/paths.mjs';
 import { PRIMARY_BROWSER_ALIAS, SHELL_ALIAS } from '../../../tooling/components/browser/constants.mjs';
 import { migrateBrowserMcpConfig } from '../../../tooling/components/browser/browser.mjs';
+import { findStaleAiosMcpConfigs } from '../../../tooling/components/browser/mcp/mcp-path-repair.mjs';
+import { auditOpenCodePlugins, detectOpenCodeMajor } from '../../../clients/opencode/plugin-contract.mjs';
 import { buildCapabilityMatrix, inspectMcpProxyTargets } from '../transport/clients/capabilities.mjs';
 import { runInterceptionProof } from './proof.mjs';
 import { resolveMetricsFile } from './tail.mjs';
@@ -75,6 +77,23 @@ async function checkLatestTurnCompliance({ workspaceRoot, session = '', latest =
   };
 }
 
+/* 中文注释：配置卫生诊断——只读扫描，不说教也不自己动手。
+ * 这两项是现场真实坐坑：指向已回收临时目录的 MCP 路径（客户端永久失联）
+ * 与不满足 2.x 插件契约的插件文件（hook 静默停摆）。 */
+export function collectPathHygiene({ rootDir, homes, env = process.env }) {
+  const stale = findStaleAiosMcpConfigs({ projectRoot: rootDir, clientHomes: homes, env });
+  const major = detectOpenCodeMajor({ bin: 'opencode' });
+  const plugins = homes?.opencode ? auditOpenCodePlugins({ opencodeHome: homes.opencode, major }) : { findings: [], broken: [], remediation: [], scanStatus: 'no-home' };
+  return {
+    stale_mcp_paths: stale.stale.map((entry) => ({ file: entry.path, client: entry.client, paths: entry.stalePaths })),
+    stale_count: stale.stale.length,
+    opencode_major: major,
+    opencode_plugins: plugins.findings.map((item) => ({ file: item.file, verdict: item.verdict, ok: item.ok, owned: item.owned })),
+    opencode_plugins_broken: plugins.broken.length,
+    opencode_plugins_remediation: plugins.remediation || [],
+  };
+}
+
 /* 中文注释：doctor 是运维入口：先看配置，必要时修复，再跑 proof 用真实指标证明链路可用。 */
 export async function runInterceptionDoctor(options = {}, { rootDir = process.cwd(), projectRoot = rootDir, io = console, env = process.env, clientHomes = null } = {}) {
   const homes = clientHomes || getClientHomes(env);
@@ -99,6 +118,7 @@ export async function runInterceptionDoctor(options = {}, { rootDir = process.cw
     });
   }
   const afterTargets = inspectMcpProxyTargets({ rootDir, clientHomes: homes, aliases: mcpAliases });
+  const hygiene = collectPathHygiene({ rootDir, homes, env });
   /* 中文注释：配置看起来正确不代表链路真的压缩，所以 doctor 必须再跑一次 live proof。 */
   const proof = await runInterceptionProof({ sessionId: options.sessionId || options.session, json: false }, { rootDir: projectRoot || rootDir, io: { log() {} }, clientHomes: homes });
   const mcpDelivery = statusFromTargets(afterTargets);
@@ -114,6 +134,7 @@ export async function runInterceptionDoctor(options = {}, { rootDir = process.cw
     migration: migrationResult,
     targets_before: beforeTargets,
     targets_after: afterTargets,
+    hygiene,
     proof: {
       session_id: proof.session_id,
       shell: proof.shell,
@@ -136,6 +157,15 @@ export async function runInterceptionDoctor(options = {}, { rootDir = process.cw
       io.log(`Migration: created=${migrationResult.created} updated=${migrationResult.updated} unchanged=${migrationResult.unchanged} errors=${migrationResult.errors} dryRun=${migrationResult.dryRun}`);
     }
     io.log(`Proof: session=${proof.session_id} total_saved=${proof.metrics.total_saved_bytes}/${proof.metrics.total_raw_bytes} ratio=${proof.metrics.saving_ratio}`);
+    /* 中文注释：卫生项是警告而不是失败条件——它们不归属拦截链路本身，但会把真相说出来。 */
+    io.log(`Path hygiene: stale_mcp_paths=${hygiene.stale_count} opencode_plugins_broken=${hygiene.opencode_plugins_broken} (opencode major=${hygiene.opencode_major ?? 'unknown'})`);
+    for (const item of hygiene.stale_mcp_paths) {
+      io.log(`  [stale] ${item.file} -> ${item.paths.join(', ')}`);
+    }
+    for (const item of hygiene.opencode_plugins) {
+      if (item.ok) continue;
+      io.log(`  [plugin] ${item.file}: ${item.verdict}${item.owned ? ' (AIOS-owned; rerun aios init)' : ' (third-party; AIOS will not rewrite)'}`);
+    }
     if (shouldEnforceTurns) {
       io.log(`Turn compliance: session=${turnCompliance.session_id || '(none)'} pre_send=${turnCompliance.pre_send} post_receive=${turnCompliance.post_receive} violations=${turnCompliance.policy_violations}`);
     } else {

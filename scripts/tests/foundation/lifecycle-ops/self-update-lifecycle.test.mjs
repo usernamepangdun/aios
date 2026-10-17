@@ -123,7 +123,7 @@ test('install-tree self-update uses the release installer and never git commands
   if (process.platform === 'win32') {
     assert.equal(run.calls[0].startsWith('powershell '), true);
   } else {
-    assert.equal(run.calls[0].startsWith('bash -lc curl -fsSL https://github.com/'), true);
+    assert.equal(run.calls[0].startsWith('bash -lc set -o pipefail; curl -fsSL https://github.com/'), true);
     assert.equal(run.calls[0].includes('/releases/latest/download/aios-install.sh'), true);
   }
 });
@@ -176,9 +176,17 @@ test('install-tree self-update pins the asset URL to the exact newest tag', asyn
   assert.equal((envs[0] || {}).AIOS_RELEASE_TAG, 'v5.17.0');
   if (process.platform === 'win32') {
     assert.equal(run.calls[0].startsWith('powershell '), true);
+    assert.equal(run.calls[0].includes('$ErrorActionPreference = "Stop"'), true);
+    assert.equal(run.calls[0].includes('/releases/download/v5.17.0/aios-install.ps1'), true);
+    assert.equal(run.calls[0].includes('/download/download/'), false);
     assert.equal(assetUrl.endsWith('/releases/download/v5.17.0/aios.zip'), true);
   } else {
-    assert.equal(run.calls[0].includes('releases/download/v5.17.0/download/aios-install.sh'), true);
+    // 中文注释：钉住正确的 tag 资产 URL，并明确拒绝历史畸形形状
+    // `/releases/download/<tag>/download/...`（双 download 段 → 404，
+    // 正是这个 bug 让 6.1.0 → 6.4.0 升级静默变 no-op）。
+    assert.equal(run.calls[0].includes('releases/download/v5.17.0/aios-install.sh'), true);
+    assert.equal(run.calls[0].includes('/download/download/'), false);
+    assert.equal(run.calls[0].startsWith('bash -lc set -o pipefail; curl -fsSL '), true);
     assert.equal(assetUrl.endsWith('/releases/download/v5.17.0/aios.tar.gz'), true);
   }
 });

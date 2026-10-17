@@ -124,6 +124,14 @@ PRs should include:
 - Prefer CDP-based profile config in `config/browser-profiles.json` for stable login reuse.
 - Preserve human-in-the-loop checks for auth walls and sensitive outbound actions.
 
+## Temp Sandbox Hygiene (临时沙箱卫生)
+
+会话内做隔离验证时必须把沙箱建在易失目录里，**禁止在工程父目录（`$HOME/codes`）创建任何目录**：
+
+- 建沙箱：`mktemp -d -p "${TMPDIR:-/tmp}" aios-probe-XXXXXX`（`-p` 不可省略；`mktemp -d foo-XXXXXX` 会落在当前 cwd，而 cwd 常常是仓库父目录）。
+- 假 `$HOME` / `npm pack` 探针 / 复现工作树一律落在上述路径之下，并配 `trap` 或 `--older-than` 回收。
+- 回收已散落的残留：`node scripts/aios-tmp-gc.mjs --root "$HOME/codes"` 先预览（默认 `dry-run`），确认后 `--mode to-trash` 移到废纸篓暂存目录（可逆）；`--mode purge --yes` 才真删。判定只用客观事实（名字形状 + 年龄 + git 脏/未推送/stash 状态 + 是否含 `.env*.local`），含未提交改动或凭据的目录一律保留，系统临时目录根需 `--allow-volatile-root` 显式放行。
+
 ## Browser MCP Selection
 - In this repo, use the `mcp-browser-use` alias backed by `scripts/run-local-browser-mcp.mjs`.
 - Use `browser_launch` for a local browser or configure the profile with `cdpPort`/`cdpUrl` for an externally started browser.

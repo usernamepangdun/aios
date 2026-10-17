@@ -1,6 +1,7 @@
 /* 中文注释：客户端能力矩阵只声明真实可达的拦截层级，避免对不同宿主过度承诺。 */
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { ALL_CLIENTS } from '../../../clients/selection/core/definitions.mjs';
 
@@ -26,13 +27,26 @@ export const REQUIRED_TURN_COMPRESSION = Object.freeze({
 });
 
 /* 中文注释：能力矩阵是跨客户端承诺的事实源，避免文档、Skill 和代码各说各话。 */
+/* 中文注释：config/host-capabilities.json 是随运行时分发的**静态内容**，不是用户工程产物。
+   调用方传的 rootDir 是工作区（用户工程目录）；工作区没有 config/ 时必须回落到本模块所在的
+   安装根。否则在仓库外跑 `aios interception doctor` 会直接 ENOENT：开发机上看不出来，是因为
+   工作区恰好就是仓库根。写入目标仍以 rootDir 为准，只有内容根源改为模块锦定。 */
+const RUNTIME_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../../..');
+
+function interceptionConfigPath(rootDir) {
+  if (rootDir) {
+    const workspaceCandidate = path.join(rootDir, 'config', 'host-capabilities.json');
+    if (fs.existsSync(workspaceCandidate)) return workspaceCandidate;
+  }
+  return path.join(RUNTIME_ROOT, 'config', 'host-capabilities.json');
+}
 export function resolveInterceptionConfigPath(rootDir) {
-  return path.join(rootDir, 'config', 'host-capabilities.json');
+  return interceptionConfigPath(rootDir);
 }
 
 /* 中文注释：schemaVersion 校验让未来扩展矩阵时显式升级，而不是静默读错字段。 */
 export function loadHostCapabilities(rootDir) {
-  const filePath = resolveInterceptionConfigPath(rootDir);
+  const filePath = interceptionConfigPath(rootDir);
   const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8').replace(/^\uFEFF/u, ''));
   if (!parsed || typeof parsed !== 'object' || parsed.schemaVersion !== 1) {
     throw new Error(`invalid host capabilities config: ${filePath}`);

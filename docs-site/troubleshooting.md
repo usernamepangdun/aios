@@ -13,6 +13,10 @@ faq:
     a: "Run aios doctor --native --verbose to find the first actionable issue, then re-run aios init --all from the intended project root."
   - q: "Why are my MCP servers closed after an upgrade or after moving the project?"
     a: "MCP entries store absolute script paths. After moving the project or install directory, re-run aios update or aios internal browser mcp-migrate from the new root, then restart the client."
+  - q: "My MCP entries point at a /tmp or /var/folders path that no longer exists."
+    a: "Run aios interception mcp-repair to preview, then aios interception mcp-repair --fix. It re-points AIOS-managed entries to the stable runtime root, backs up each changed file, and leaves your own entries untouched."
+  - q: "My OpenCode plugin stopped working after upgrading to OpenCode 2.x."
+    a: "OpenCode 2.x loads only a default export shaped { id, setup | effect }. Re-run aios init (or aios internal codemap install) to self-heal AIOS-generated plugins; aios internal codemap doctor names the offending file."
 ---
 
 # Troubleshooting
@@ -129,6 +133,24 @@ aios update
 ~~~
 
 MCP entries in client configs (for example `~/.config/opencode/opencode.json`) store absolute paths to this repository's `scripts/` launchers. After the project or install directory is physically moved, those entries point at a path that no longer exists, so the servers fail to start. `aios update` rewrites them by default (the browser component is in the default update set); `aios internal browser mcp-migrate` rewrites them directly. Run either from the new project root, then restart the client. `aios doctor` checks the launcher paths without rewriting anything.
+
+**Symptom:** entries point at a temporary directory (`/tmp/...`, `/var/folders/...`) that no longer exists.
+
+~~~bash
+aios interception mcp-repair
+aios interception mcp-repair --fix
+~~~
+
+A temporary root — an unpacked install, a test sandbox, or a `/tmp` checkout — can be captured as an absolute path in a long-lived client config. When the OS reclaims that directory, the servers never start again and re-running `mcp-migrate` from another temporary root just replaces one dead path with another. `mcp-repair` resolves the stable AIOS runtime root (`AIOS_ROOT_DIR`, or the installed runtime the `aios` launcher points at) and re-points only AIOS-managed entries onto it: preview by default, `--fix` to write, a `.bak-*` per changed file, your own entries left byte-for-byte, `--client <name>` to narrow the scope. It refuses to run when no stable root can be resolved rather than guessing. AIOS now also refuses to write persistent configs when the source root is itself temporary, so this shape no longer recurs.
+
+**Symptom:** an OpenCode plugin (code-review-graph, or another AIOS-generated one) stops working after upgrading OpenCode to 2.x, with only a log line like `PluginModule.LoadError: Expected object at ["default"]`.
+
+~~~bash
+aios internal codemap doctor
+aios init
+~~~
+
+OpenCode 2.x reads only the module's `default` export and requires `{ id, effect | setup }`; 1.x walked named exports instead. A 1.x-shaped plugin under 2.x produces no error on the command line and fires no hooks — the integration is silently off. AIOS-generated plugins now ship both shapes and self-heal on install (`aios init`, or `aios internal codemap install`), keeping a `.bak-*` of the old file. `codemap doctor` names any plugin file that 2.x cannot load and any `"plugin": [...]` entry pointing at a missing file. Third-party plugin files are reported, never rewritten.
 
 ## Token tools
 
