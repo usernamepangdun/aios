@@ -123,6 +123,11 @@ test('route trigger sync installs slash shortcuts in each client home', async ()
   assert.match(geminiHarness, /\{\{args\}\}/u);
   assert.match(geminiHarness, /--route harness/u);
 
+  const claudeHarness = await readFile(path.join(homeMap.claude, 'commands', 'harness.md'), 'utf8');
+  assert.match(claudeHarness, /--harness-provider claude/u);
+  assert.match(claudeHarness, /Provider lock/u);
+  assert.match(claudeHarness, /do not change `--harness-provider`/u);
+
   const opencodeSingle = await readFile(path.join(homeMap.opencode, 'commands', 'single.md'), 'utf8');
   assert.match(opencodeSingle, /description: AIOS route: single/u);
   assert.match(opencodeSingle, /\$ARGUMENTS/u);

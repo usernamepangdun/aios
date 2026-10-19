@@ -59,6 +59,13 @@ Rules:
 - Dispatch parallel agents only after the AIOS policy selects one planned work item with independent domains; keep coupled or shared-state changes sequential.
 - Before claiming run success, apply the AIOS host verification gate and record concrete artifact evidence.
 
+## Provider Lock
+
+- A routed harness run has one fixed `--harness-provider` for its lifetime.
+- On failure, do not change the provider, re-run the route with another provider, or substitute a different client. Report the failure class and stop.
+- Provider changes are a user decision. `aios harness resume` must keep the provider persisted in the run summary.
+- If the failure is `missing-envelope` (the rex evidence envelope is absent), do not retry with another provider. Report the missing envelope contract and let the user choose a model or profile that follows it.
+
 ## Context Boundary
 
 Use ContextDB as storage and evidence, not as prompt replay. The harness may write sessions, events, checkpoints, continuity files, handoff files, and offload refs, but it must not turn those artifacts into an automatic startup prompt.

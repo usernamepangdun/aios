@@ -116,6 +116,12 @@ export function buildRoutePromptBody({ rootDir, client, route, placeholder }) {
     'Otherwise, execute the AIOS route directly from the current workspace; do not ask the user to run it manually unless they requested preview/dry-run.',
     'This route is work-item-scoped: use it only for one explicit `planned` work item. Do not create a replacement plan or re-run a global bootstrap in the routed worker.',
     'Replace `<task>` with the exact task arguments, quoted safely for the shell.',
+    ...(route === 'harness'
+      ? [
+        '',
+        '**Provider lock**: do not change `--harness-provider` or re-run this route with a different provider after a failure. Report the failure, stop, and let the user decide whether to switch providers.',
+      ]
+      : []),
     '',
     '```bash',
     routedCommand,
